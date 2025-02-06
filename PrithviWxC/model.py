@@ -177,7 +177,7 @@ class MultiheadAttention(nn.Module):
         # q, k, v [B, H, S, C/H]
         q, k, v = (
             self.qkv_layer(x)
-            .view(B, S, self.n_heads, 3 * (C // self.n_heads))
+            .reshape(B, S, self.n_heads, 3 * (C // self.n_heads))
             .transpose(1, 2)
             .chunk(chunks=3, dim=3)
         )
@@ -201,13 +201,13 @@ class MultiheadAttention(nn.Module):
                 )
 
         # x [B, S, C]
-        x = x.transpose(1, 2).view(B, S, C)
+        x = x.transpose(1, 2).reshape(B, S, C)
 
         # x [B, S, C]
         x = self.w_layer(x)
 
         # Back to input shape
-        x = x.view(*passenger_dims, S, self.features)
+        x = x.reshape(*passenger_dims, S, self.features)
         return x
 
 
@@ -369,11 +369,11 @@ class SWINShift(_Shift):
         """
         nbatch, *other = x.shape
 
-        y1 = x.view(nbatch, *self._g_shape, *self._l_shape, -1)
+        y1 = x.reshape(nbatch, *self._g_shape, *self._l_shape, -1)
         y2 = y1.permute(0, 5, 1, 3, 2, 4).contiguous()
 
         s = y2.shape
-        return y2.view((nbatch, -1, s[2] * s[3], s[4] * s[5]))
+        return y2.reshape((nbatch, -1, s[2] * s[3], s[4] * s[5]))
 
     def _to_grid_local(self, x: Tensor) -> Tensor:
         """
@@ -398,11 +398,11 @@ class SWINShift(_Shift):
         """
         nbatch, *other = x.shape
 
-        z1 = x.view(nbatch, -1, *self._lat_patch)
+        z1 = x.reshape(nbatch, -1, *self._lat_patch)
         z2 = z1.permute(0, 2, 4, 3, 5, 1).contiguous()
 
         s = z2.shape
-        return z2.view(nbatch, s[1] * s[2], s[3] * s[4], -1)
+        return z2.reshape(nbatch, s[1] * s[2], s[3] * s[4], -1)
 
     def _from_grid_local(self, x: Tensor) -> Tensor:
         """
@@ -988,7 +988,7 @@ class PrithviWxC(nn.Module):
         """
         # Identify which indices (values) should be masked
 
-        maskable_indices = self._local_idx.view(1, -1).expand(*sizes[:2], -1)
+        maskable_indices = self._local_idx.reshape(1, -1).expand(*sizes[:2], -1)
 
         maskable_indices = self._shuffle_along_axis(maskable_indices, 2)
 
@@ -1007,7 +1007,7 @@ class PrithviWxC(nn.Module):
         """
         # Identify which indices (values) should be masked
 
-        maskable_indices = self._global_idx.view(1, -1).expand(*sizes[:1], -1)
+        maskable_indices = self._global_idx.reshape(1, -1).expand(*sizes[:1], -1)
 
         maskable_indices = self._shuffle_along_axis(maskable_indices, 1)
 
@@ -1056,7 +1056,7 @@ class PrithviWxC(nn.Module):
         idx_total = torch.argsort(
             torch.cat([idx_masked, idx_unmasked], dim=-1), dim=-1
         )
-        idx_total = idx_total.view(
+        idx_total = idx_total.reshape(
             *idx_total.shape, *[1] * (data_unmasked.ndim - dim)
         )
         idx_total = idx_total.expand(
@@ -1090,7 +1090,7 @@ class PrithviWxC(nn.Module):
         )
 
         modes = (
-            torch.arange(self.embed_dim // 4, device=x_static.device).view(
+            torch.arange(self.embed_dim // 4, device=x_static.device).reshape(
                 1, -1, 1, 1
             )
             + 1.0
@@ -1115,8 +1115,8 @@ class PrithviWxC(nn.Module):
         Returns:
             Tensor: Tensor of shape [batch, embed_dim, 1, 1]
         """
-        input_time = self.input_time_embedding(input_time.view(-1, 1, 1, 1))
-        lead_time = self.lead_time_embedding(lead_time.view(-1, 1, 1, 1))
+        input_time = self.input_time_embedding(input_time.reshape(-1, 1, 1, 1))
+        lead_time = self.lead_time_embedding(lead_time.reshape(-1, 1, 1, 1))
 
         time_encoding = torch.cat(
             (
@@ -1140,7 +1140,7 @@ class PrithviWxC(nn.Module):
         """
         n_batch = x.shape[0]
 
-        x = x.view(
+        x = x.reshape(
             n_batch,
             -1,
             self.global_shape_mu[0],
@@ -1151,7 +1151,7 @@ class PrithviWxC(nn.Module):
         x = x.permute(0, 2, 4, 3, 5, 1).contiguous()
 
         s = x.shape
-        return x.view(n_batch, s[1] * s[2], s[3] * s[4], -1)
+        return x.reshape(n_batch, s[1] * s[2], s[3] * s[4], -1)
 
     def from_patching(self, x: Tensor) -> Tensor:
         """Transform data from two axis patching to lat/lon space
@@ -1165,7 +1165,7 @@ class PrithviWxC(nn.Module):
         """
         n_batch = x.shape[0]
 
-        x = x.view(
+        x = x.reshape(
             n_batch,
             self.global_shape_mu[0],
             self.global_shape_mu[1],
@@ -1176,7 +1176,7 @@ class PrithviWxC(nn.Module):
         x = x.permute(0, 5, 1, 3, 2, 4).contiguous()
 
         s = x.shape
-        return x.view(n_batch, -1, s[2] * s[3], s[4] * s[5])
+        return x.reshape(n_batch, -1, s[2] * s[3], s[4] * s[5])
 
     def forward(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         """
@@ -1217,15 +1217,15 @@ class PrithviWxC(nn.Module):
             index = torch.where(
                 batch["lead_time"] > 0, batch["x"].shape[1] - 1, 0
             )
-            index = index.view(-1, 1, 1, 1, 1)
+            index = index.reshape(-1, 1, 1, 1, 1)
             index = index.expand(batch_size, 1, *batch["x"].shape[2:])
             x_hat = torch.gather(batch["x"], dim=1, index=index)
             x_hat = x_hat.squeeze(1)
         elif self.residual == "climate":
             climate_scaled = (
-                batch["climate"] - self.input_scalers_mu.view(1, -1, 1, 1)
+                batch["climate"] - self.input_scalers_mu.reshape(1, -1, 1, 1)
             ) / (
-                self.input_scalers_sigma.view(1, -1, 1, 1)
+                self.input_scalers_sigma.reshape(1, -1, 1, 1)
                 + self.input_scalers_epsilon
             )
 
@@ -1269,7 +1269,7 @@ class PrithviWxC(nn.Module):
         unmasked = torch.gather(
             tokens,
             dim=maskdim - 1,
-            index=indices_unmasked.view(*unmask_view).expand(
+            index=indices_unmasked.reshape(*unmask_view).expand(
                 *indices_unmasked.shape, *tokens.shape[maskdim:]
             ),
         )
@@ -1286,7 +1286,7 @@ class PrithviWxC(nn.Module):
         masked = torch.gather(
             masked,
             dim=maskdim - 1,
-            index=indices_masked.view(*mask_view).expand(
+            index=indices_masked.reshape(*mask_view).expand(
                 *indices_masked.shape, *tokens.shape[maskdim:]
             ),
         )
